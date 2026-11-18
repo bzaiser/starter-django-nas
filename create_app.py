@@ -53,9 +53,15 @@ def generate_app(cfg: dict) -> Path:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         if rel.name.endswith(".jinja"):
             rendered = render_template_text(src.read_text(encoding="utf-8"), cfg)
-            out_path.write_text(rendered, encoding="utf-8")
+            out_path.write_text(rendered, encoding="utf-8", newline="\n")
         else:
             shutil.copy2(src, out_path)
+            if out_path.suffix == ".sh":
+                out_path.write_text(out_path.read_text(encoding="utf-8").replace("\r\n", "\n"), encoding="utf-8", newline="\n")
+                try:
+                    os.chmod(out_path, 0o755)
+                except OSError:
+                    pass
 
     env_content = (
         f"DJANGO_SECRET_KEY={cfg['secret_key']}\n"

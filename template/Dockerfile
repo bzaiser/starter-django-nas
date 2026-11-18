@@ -12,9 +12,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=appuser:appuser . .
-RUN mkdir -p /app/staticfiles /opt/ds-pkg && chown -R appuser:appuser /app /opt/ds-pkg
+RUN sed -i 's/\r$//' /app/entrypoint.sh \
+    && chmod +x /app/entrypoint.sh \
+    && mkdir -p /app/staticfiles /app/data /opt/ds-pkg \
+    && chown -R appuser:appuser /app /opt/ds-pkg
 
 USER appuser
 EXPOSE 8000
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["sh", "/app/entrypoint.sh"]
