@@ -83,8 +83,9 @@ def run_cli_wizard() -> dict:
     print("=== Django NAS App-Baukasten ===")
     app_name = input("App-Name [Meine NAS App]: ").strip() or "Meine NAS App"
     default_slug = re.sub(r"[^a-z0-9]+", "_", app_name.lower()).strip("_") or "my_nas_app"
-    project_slug = input(f"Projekt-Slug [{default_slug}]: ").strip() or default_slug
-    default_dir = str(Path.cwd().parent / project_slug)
+    raw_slug = input(f"Projekt-Slug [{default_slug}]: ").strip()
+    project_slug = re.sub(r"[^a-z0-9_]+", "_", raw_slug.lower()).strip("_") or default_slug if raw_slug else default_slug
+    default_dir = str(Path.cwd() / project_slug)
     target_dir = input(f"Zielordner [{default_dir}]: ").strip() or default_dir
     port = input("Port [8000]: ").strip() or "8000"
     allowed_hosts = input("ALLOWED_HOSTS [*]: ").strip() or "*"
