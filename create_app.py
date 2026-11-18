@@ -13,6 +13,7 @@ import sys
 TEMPLATE_DIR = Path(__file__).resolve().parent / "template"
 
 KITS = [
+    ("include_domain", "domain-django-kit (Stammdaten, Personen, Assets, Dokumente, Suche, Rechte-Matrix)", True),
     ("include_auth", "auth-django-kit (Login, Passwort, Benutzerprofil)", True),
     ("include_notify", "notify-django-kit (Benachrichtigungen, HTML-Mails, Webhooks)", True),
     ("include_cal", "cal-django-kit (Kalender-UI, .ics-Feed, CalDAV)", False),

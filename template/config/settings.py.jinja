@@ -15,7 +15,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "design_studio",
-{% if include_auth %}    "auth_kit",
+{% if include_domain %}    "domain_kit",
+{% endif %}{% if include_auth %}    "auth_kit",
 {% endif %}{% if include_notify %}    "notify_kit",
 {% endif %}{% if include_cal %}    "cal_kit",
 {% endif %}{% if include_grid %}    "grid_kit",
@@ -48,7 +49,8 @@ TEMPLATES = [{
             "django.contrib.auth.context_processors.auth",
             "django.contrib.messages.context_processors.messages",
             "design_studio.context_processors.theme_context",
-{% if include_notify %}            "notify_kit.context_processors.notify_context",
+{% if include_domain %}            "domain_kit.context_processors.domain_context",
+{% endif %}{% if include_notify %}            "notify_kit.context_processors.notify_context",
 {% endif %}        ],
     },
 }]
@@ -74,7 +76,12 @@ STORAGES = {
 DESIGN_STUDIO_APP_NAME = os.environ.get("DESIGN_STUDIO_APP_NAME", "{{ app_name }}")
 DESIGN_STUDIO_MENU_ITEMS = [
     {"id": "home", "url_name": "home", "match_urls": ["home"], "default_label": "Übersicht", "icon": "bi-speedometer2", "zone": "main", "display": "icon_text", "visible": True, "order": 1},
-{% if include_cal %}    {"id": "calendar", "url_name": "cal_kit:calendar", "match_urls": ["calendar"], "default_label": "Kalender", "icon": "bi-calendar3", "zone": "main", "display": "icon_text", "visible": True, "order": 2},
+{% if include_domain %}    {"id": "persons", "url_name": "domain_kit:persons", "match_urls": ["persons"], "default_label": "Personen", "icon": "bi-people", "zone": "main", "display": "icon_text", "visible": True, "order": 2},
+    {"id": "assets", "url_name": "domain_kit:assets", "match_urls": ["assets"], "default_label": "Assets", "icon": "bi-boxes", "zone": "main", "display": "icon_text", "visible": True, "order": 3},
+    {"id": "documents", "url_name": "domain_kit:documents", "match_urls": ["documents"], "default_label": "Dokumente", "icon": "bi-folder2-open", "zone": "main", "display": "icon_text", "visible": True, "order": 4},
+    {"id": "search", "url_name": "domain_kit:search", "match_urls": ["search"], "default_label": "Suche", "icon": "bi-search", "zone": "main", "display": "icon_text", "visible": True, "order": 5},
+    {"id": "domain_settings", "url_name": "domain_kit:settings", "match_urls": ["settings"], "default_label": "Stammdaten", "icon": "bi-sliders", "zone": "utility", "display": "icon_only", "visible": True, "order": 0},
+{% endif %}{% if include_cal %}    {"id": "calendar", "url_name": "cal_kit:calendar", "match_urls": ["calendar"], "default_label": "Kalender", "icon": "bi-calendar3", "zone": "main", "display": "icon_text", "visible": True, "order": 6},
 {% endif %}{% if include_notify %}    {"id": "notifications", "url_name": "notify_kit:inbox", "match_urls": ["inbox"], "default_label": "Meldungen", "icon": "bi-bell", "zone": "utility", "display": "icon_only", "visible": True, "order": 1},
 {% endif %}{% if include_auth %}    {"id": "profile", "url_name": "auth_kit:profile", "match_urls": ["profile"], "default_label": "Profil", "icon": "bi-person-circle", "zone": "utility", "display": "icon_only", "visible": True, "order": 2},
 {% endif %}    {"id": "design_studio", "url_name": "design_studio:studio", "match_urls": ["studio"], "default_label": "Design Studio", "icon": "bi-palette", "zone": "utility", "display": "icon_only", "visible": True, "order": 3, "locked": True},

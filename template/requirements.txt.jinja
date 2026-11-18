@@ -2,7 +2,8 @@ Django>=4.2
 gunicorn>=22.0
 whitenoise>=6.6
 git+https://github.com/bzaiser/django-design-studio.git@main
-{% if include_auth %}git+https://github.com/bzaiser/auth-django-kit.git@main
+{% if include_domain %}git+https://github.com/bzaiser/domain-django-kit.git@main
+{% endif %}{% if include_auth %}git+https://github.com/bzaiser/auth-django-kit.git@main
 {% endif %}{% if include_notify %}git+https://github.com/bzaiser/notify-django-kit.git@main
 {% endif %}{% if include_cal %}git+https://github.com/bzaiser/cal-django-kit.git@main
 {% endif %}{% if include_grid %}git+https://github.com/bzaiser/grid-django-kit.git@main

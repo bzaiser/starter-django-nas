@@ -10,6 +10,11 @@ project_slug:
   help: Technischer Projekt-Slug (ohne Leerzeichen)
   default: my_nas_app
 
+include_domain:
+  type: bool
+  help: domain-django-kit (Stammdaten, Personen, Assets, Dokumente, Suche & Rechte-Matrix) einbinden?
+  default: true
+
 include_auth:
   type: bool
   help: auth-django-kit (Login & Benutzerprofil) einbinden?
