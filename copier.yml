@@ -1,0 +1,41 @@
+_subdirectory: template
+
+app_name:
+  type: str
+  help: Anzeigename der App im Design Studio
+  default: Meine NAS App
+
+project_slug:
+  type: str
+  help: Technischer Projekt-Slug (ohne Leerzeichen)
+  default: my_nas_app
+
+include_auth:
+  type: bool
+  help: auth-django-kit (Login & Benutzerprofil) einbinden?
+  default: true
+
+include_notify:
+  type: bool
+  help: notify-django-kit (Benachrichtigungen & Mails) einbinden?
+  default: true
+
+include_cal:
+  type: bool
+  help: cal-django-kit (Kalender & .ics-Feed) einbinden?
+  default: false
+
+include_grid:
+  type: bool
+  help: grid-django-kit (Tabellen, Suche & CSV/JSON-Export) einbinden?
+  default: true
+
+include_seed:
+  type: bool
+  help: seed-django-kit (Demo-Seeding) einbinden?
+  default: true
+
+include_ops:
+  type: bool
+  help: ops-django-kit (Healthcheck, Audit-Log & Backup) einbinden?
+  default: true

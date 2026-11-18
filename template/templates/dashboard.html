@@ -1,0 +1,10 @@
+{% extends "design_studio/layouts/dashboard.html" %}
+{% load i18n %}
+
+{% block page_title %}{% trans "Übersicht" %}{% endblock %}
+{% block page_subtitle %}{{ design_studio_app_name|default:"App" }}{% endblock %}
+
+{% block kpi_cards %}
+    {% include "design_studio/components/kpi_card.html" with title="Status" value="Online" icon="bi-hdd-check" size="sm" state=2 %}
+    {% include "design_studio/components/kpi_card.html" with title="Baukasten" value="Bereit" icon="bi-boxes" size="sm" state=1 %}
+{% endblock %}
