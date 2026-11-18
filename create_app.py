@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+"""Interactive App-Baukasten builder (Tkinter checkbox GUI + CLI fallback, zero external deps)."""
+import argparse
+import os
+from pathlib import Path
+import re
+import secrets
+import shutil
+import subprocess
+import sys
+
+TEMPLATE_DIR = Path(__file__).resolve().parent / "template"
+
+KITS = [
+    ("include_auth", "auth-django-kit (Login, Passwort, Benutzerprofil)", True),
+    ("include_notify", "notify-django-kit (Benachrichtigungen, HTML-Mails, Webhooks)", True),
+    ("include_cal", "cal-django-kit (Kalender-UI, .ics-Feed, CalDAV)", False),
+    ("include_grid", "grid-django-kit (Tabellen, Suche, CSV/JSON-Export)", True),
+    ("include_seed", "seed-django-kit (Demo-Seeding Framework)", True),
+    ("include_ops", "ops-django-kit (Healthcheck /healthz, Audit-Log, Backup)", True),
+]
+
+IF_BLOCK_RE = re.compile(r"\{%\s*if\s+(\w+)\s*%\}(.*?)\{%\s*endif\s*%\}", re.DOTALL)
+VAR_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+
+
+def render_template_text(text: str, ctx: dict) -> str:
+    def _eval_if(match):
+        key, body = match.group(1), match.group(2)
+        return body if ctx.get(key) else ""
+
+    prev = None
+    while prev != text:
+        prev = text
+        text = IF_BLOCK_RE.sub(_eval_if, text)
+    return VAR_RE.sub(lambda m: str(ctx.get(m.group(1), "")), text)
+
+
+def generate_app(cfg: dict) -> Path:
+    dest = Path(cfg["target_dir"]).resolve()
+    if dest.exists() and any(dest.iterdir()):
+        raise FileExistsError(f"Zielordner existiert bereits und ist nicht leer: {dest}")
+    dest.mkdir(parents=True, exist_ok=True)
+
+    for src in TEMPLATE_DIR.rglob("*"):
+        rel = src.relative_to(TEMPLATE_DIR)
+        if src.is_dir():
+            (dest / rel).mkdir(parents=True, exist_ok=True)
+            continue
+        out_rel = rel.with_name(rel.name[:-6]) if rel.name.endswith(".jinja") else rel
+        out_path = dest / out_rel
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        if rel.name.endswith(".jinja"):
+            rendered = render_template_text(src.read_text(encoding="utf-8"), cfg)
+            out_path.write_text(rendered, encoding="utf-8")
+        else:
+            shutil.copy2(src, out_path)
+
+    env_content = (
+        f"DJANGO_SECRET_KEY={cfg['secret_key']}\n"
+        f"DJANGO_DEBUG={'True' if cfg['debug'] else 'False'}\n"
+        f"DJANGO_ALLOWED_HOSTS={cfg['allowed_hosts']}\n"
+        f"CSRF_TRUSTED_ORIGINS={cfg['csrf_origins']}\n"
+        f"DESIGN_STUDIO_APP_NAME={cfg['app_name']}\n"
+    )
+    (dest / ".env").write_text(env_content, encoding="utf-8")
+
+    # Adjust port in docker-compose.yml if non-default
+    port = str(cfg.get("port") or "8000").strip()
+    if port != "8000":
+        dc = dest / "docker-compose.yml"
+        if dc.exists():
+            dc.write_text(dc.read_text(encoding="utf-8").replace('"8000:8000"', f'"{port}:8000"'), encoding="utf-8")
+
+    if cfg.get("init_git", True):
+        subprocess.run(["git", "init", "-b", "main"], cwd=dest, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    return dest
+
+
+def run_cli_wizard() -> dict:
+    print("=== Django NAS App-Baukasten ===")
+    app_name = input("App-Name [Meine NAS App]: ").strip() or "Meine NAS App"
+    default_slug = re.sub(r"[^a-z0-9]+", "_", app_name.lower()).strip("_") or "my_nas_app"
+    project_slug = input(f"Projekt-Slug [{default_slug}]: ").strip() or default_slug
+    default_dir = str(Path.cwd().parent / project_slug)
+    target_dir = input(f"Zielordner [{default_dir}]: ").strip() or default_dir
+    port = input("Port [8000]: ").strip() or "8000"
+    allowed_hosts = input("ALLOWED_HOSTS [*]: ").strip() or "*"
+    default_csrf = f"http://localhost:{port}"
+    csrf_origins = input(f"CSRF_TRUSTED_ORIGINS [{default_csrf}]: ").strip() or default_csrf
+    debug = input("DJANGO_DEBUG? (j/N) [N]: ").strip().lower() in ("j", "y", "ja", "yes")
+
+    cfg = {
+        "app_name": app_name,
+        "project_slug": project_slug,
+        "target_dir": target_dir,
+        "port": port,
+        "allowed_hosts": allowed_hosts,
+        "csrf_origins": csrf_origins,
+        "debug": debug,
+        "secret_key": secrets.token_urlsafe(48),
+        "init_git": True,
+    }
+    print("\nBaukasten-Module auswählen (J/n):")
+    for key, label, default in KITS:
+        hint = "J/n" if default else "j/N"
+        ans = input(f"  [{hint}] {label}: ").strip().lower()
+        cfg[key] = default if not ans else ans in ("j", "y", "ja", "yes")
+    return cfg
+
+
+def run_gui_wizard() -> dict | None:
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, ttk
+
+    result = {}
+    root = tk.Tk()
+    root.title("Django NAS App-Baukasten")
+    root.geometry("580x560")
+    root.resizable(False, False)
+
+    frm = ttk.Frame(root, padding=16)
+    frm.pack(fill="both", expand=True)
+
+    app_name_var = tk.StringVar(value="Meine NAS App")
+    slug_var = tk.StringVar(value="meine_nas_app")
+    dir_var = tk.StringVar(value=str(Path(__file__).resolve().parent.parent / "meine_nas_app"))
+    port_var = tk.StringVar(value="8000")
+    hosts_var = tk.StringVar(value="*")
+    csrf_var = tk.StringVar(value="http://localhost:8000")
+    debug_var = tk.BooleanVar(value=False)
+    git_var = tk.BooleanVar(value=True)
+
+    def add_row(row, label, var, browse=False):
+        ttk.Label(frm, text=label).grid(row=row, column=0, sticky="w", pady=3)
+        ent = ttk.Entry(frm, textvariable=var, width=42)
+        ent.grid(row=row, column=1, sticky="ew", pady=3, padx=(8, 0))
+        if browse:
+            def _pick():
+                d = filedialog.askdirectory()
+                if d:
+                    var.set(d)
+            ttk.Button(frm, text="...", width=3, command=_pick).grid(row=row, column=2, padx=(4, 0))
+
+    add_row(0, "App-Name:", app_name_var)
+    add_row(1, "Projekt-Slug:", slug_var)
+    add_row(2, "Zielordner:", dir_var, browse=True)
+    add_row(3, "Docker-Port:", port_var)
+    add_row(4, "ALLOWED_HOSTS:", hosts_var)
+    add_row(5, "CSRF_TRUSTED_ORIGINS:", csrf_var)
+
+    ttk.Separator(frm).grid(row=6, column=0, columnspan=3, sticky="ew", pady=10)
+    ttk.Label(frm, text="Module zum Anhaken:", font=("Segoe UI", 10, "bold")).grid(row=7, column=0, columnspan=3, sticky="w")
+
+    kit_vars = {}
+    r = 8
+    for key, label, default in KITS:
+        v = tk.BooleanVar(value=default)
+        kit_vars[key] = v
+        ttk.Checkbutton(frm, text=label, variable=v).grid(row=r, column=0, columnspan=3, sticky="w", pady=2)
+        r += 1
+
+    ttk.Separator(frm).grid(row=r, column=0, columnspan=3, sticky="ew", pady=10)
+    r += 1
+    ttk.Checkbutton(frm, text="DJANGO_DEBUG=True (nur Entwicklung)", variable=debug_var).grid(row=r, column=0, columnspan=3, sticky="w")
+    r += 1
+    ttk.Checkbutton(frm, text="Git-Repository direkt initialisieren", variable=git_var).grid(row=r, column=0, columnspan=3, sticky="w")
+    r += 1
+
+    def on_create():
+        result.update({
+            "app_name": app_name_var.get().strip() or "Meine NAS App",
+            "project_slug": slug_var.get().strip() or "my_nas_app",
+            "target_dir": dir_var.get().strip(),
+            "port": port_var.get().strip() or "8000",
+            "allowed_hosts": hosts_var.get().strip() or "*",
+            "csrf_origins": csrf_var.get().strip() or "http://localhost:8000",
+            "debug": debug_var.get(),
+            "init_git": git_var.get(),
+            "secret_key": secrets.token_urlsafe(48),
+        })
+        for k, v in kit_vars.items():
+            result[k] = v.get()
+        try:
+            dest = generate_app(result)
+            messagebox.showinfo("Fertig", f"App erstellt unter:\n{dest}\n\nStart mit: docker compose up --build")
+            root.destroy()
+        except Exception as exc:
+            messagebox.showerror("Fehler", str(exc))
+
+    ttk.Button(frm, text="App & .env erstellen", command=on_create).grid(row=r, column=1, sticky="e", pady=14)
+    root.mainloop()
+    return result or None
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Erstellt eine neue Django-NAS-App inkl. .env.")
+    parser.add_argument("--cli", action="store_true", help="Terminal-Modus statt GUI verwenden.")
+    args = parser.parse_args()
+
+    if not args.cli:
+        try:
+            run_gui_wizard()
+            return
+        except Exception:
+            pass
+
+    cfg = run_cli_wizard()
+    dest = generate_app(cfg)
+    print(f"\nFertig! App erstellt unter: {dest}")
+    print("Starten mit: docker compose up --build")
+
+
+if __name__ == "__main__":
+    main()
