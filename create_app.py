@@ -38,10 +38,12 @@ def render_template_text(text: str, ctx: dict) -> str:
     return VAR_RE.sub(lambda m: str(ctx.get(m.group(1), "")), text)
 
 
+def _write_lf(path: Path, text: str):
+    path.write_bytes(text.replace("\r\n", "\n").encode("utf-8"))
+
+
 def generate_app(cfg: dict) -> Path:
     dest = Path(cfg["target_dir"]).resolve()
-    if dest.exists() and any(dest.iterdir()):
-        raise FileExistsError(f"Zielordner existiert bereits und ist nicht leer: {dest}")
     dest.mkdir(parents=True, exist_ok=True)
 
     for src in TEMPLATE_DIR.rglob("*"):
@@ -54,11 +56,11 @@ def generate_app(cfg: dict) -> Path:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         if rel.name.endswith(".jinja"):
             rendered = render_template_text(src.read_text(encoding="utf-8"), cfg)
-            out_path.write_text(rendered, encoding="utf-8", newline="\n")
+            _write_lf(out_path, rendered)
         else:
             shutil.copy2(src, out_path)
             if out_path.suffix == ".sh":
-                out_path.write_text(out_path.read_text(encoding="utf-8").replace("\r\n", "\n"), encoding="utf-8", newline="\n")
+                _write_lf(out_path, out_path.read_text(encoding="utf-8"))
                 try:
                     os.chmod(out_path, 0o755)
                 except OSError:
@@ -71,14 +73,14 @@ def generate_app(cfg: dict) -> Path:
         f"CSRF_TRUSTED_ORIGINS={cfg['csrf_origins']}\n"
         f"DESIGN_STUDIO_APP_NAME={cfg['app_name']}\n"
     )
-    (dest / ".env").write_text(env_content, encoding="utf-8")
+    _write_lf(dest / ".env", env_content)
 
     # Adjust port in docker-compose.yml if non-default
     port = str(cfg.get("port") or "8000").strip()
     if port != "8000":
         dc = dest / "docker-compose.yml"
         if dc.exists():
-            dc.write_text(dc.read_text(encoding="utf-8").replace('"8000:8000"', f'"{port}:8000"'), encoding="utf-8")
+            _write_lf(dc, dc.read_text(encoding="utf-8").replace('"8000:8000"', f'"{port}:8000"'))
 
     if cfg.get("init_git", True):
         subprocess.run(["git", "init", "-b", "main"], cwd=dest, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -87,6 +89,11 @@ def generate_app(cfg: dict) -> Path:
 
 
 def run_cli_wizard() -> dict:
+    try:
+        import termios
+        termios.tcflush(sys.stdin, termios.TCIFLUSH)
+    except Exception:
+        pass
     print("=== Django NAS App-Baukasten ===")
     app_name = input("App-Name [Meine NAS App]: ").strip() or "Meine NAS App"
     default_slug = re.sub(r"[^a-z0-9]+", "_", app_name.lower()).strip("_") or "my_nas_app"
