@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Interactive App-Baukasten builder (Tkinter checkbox GUI + CLI fallback, zero external deps)."""
+from __future__ import annotations
 import argparse
 import os
 from pathlib import Path
