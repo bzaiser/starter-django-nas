@@ -6,6 +6,7 @@ services:
     env_file: .env
     environment:
       - PYTHONPATH=/opt/ds-pkg
+      - DESIGN_STUDIO_TARGET=/opt/ds-pkg
     ports:
       - "8000:8000"
     volumes:
