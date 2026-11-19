@@ -1,0 +1,47 @@
+---
+name: django-baukasten
+description: >-
+  Verbindliche Architektur-, Design- und Komponentenregeln für alle Django-Projekte
+  aus dem App-Baukasten (starter-django-nas + design_studio + *_kit). Immer verwenden,
+  wenn eine Baukasten-App erstellt, erweitert, um Seiten/Models/Views ergänzt oder
+  gestylt wird.
+---
+
+# Django App-Baukasten: Verbindliche Regeln
+
+## 1. Striktes Design- & Layout-Verbot ("Kein CSS-Gemurkse")
+- **Keine freien HTML-Grundgerüste:** Jedes Template MUSS von einem `design_studio`-Layout erben:
+  - `{% extends "design_studio/layouts/base.html" %}` (freie Seiten / Formulare / Detailseiten)
+  - `{% extends "design_studio/layouts/dashboard.html" %}` (Dashboards mit `kpi_cards`, `dashboard_charts`, `dashboard_tables`)
+  - `{% extends "design_studio/layouts/list_page.html" %}` (Tabellen-/Listenseiten mit `page_actions`, `table_filters`, `table_head`, `table_body`, `card_footer`)
+- **Keine neue Seite ohne Menü-Eintrag:** Jede neue Haupt- oder Unterseite muss in `settings.py` unter `DESIGN_STUDIO_MENU_ITEMS` registriert werden. Niemals eine eigene `<nav>` bauen.
+- **Keine lokalen Overrides:** Niemals Dateien unter `templates/design_studio/` oder `static/design_studio/` anlegen.
+- **Kein eigenes CSS-Gemurkse:**
+  - Keine `<style>`-Blöcke und keine eigenen CSS-Dateien für Layout, Farben, Abstände oder Karten-Design anlegen.
+  - Keine externen CDN-Links (`cdn.jsdelivr.net`, `unpkg.com`, Google Fonts etc.) einbauen — Bootstrap 5, Bootstrap Icons (`bi-*`) und SortableJS kommen lokal aus `design_studio`.
+  - Ausschließlich Bootstrap-5-Utility-Klassen, Standard-Klassen (`card`, `table`, `modal`, `badge`, `btn`) und Theme-Variablen (`--theme-state-1` bis `--theme-state-8`, `--app-primary`) nutzen.
+- **KPI-Karten:** Immer `{% include "design_studio/components/kpi_card.html" with title=... value=... icon="bi-..." size="sm|md|lg" state=1..8 %}` nutzen.
+
+## 2. Baukasten-Pakete nutzen (nicht neu erfinden)
+Prüfe `INSTALLED_APPS` in `settings.py` und nutze vorhandene Kits statt eigener Implementierungen:
+- **`domain_kit`**: Stammdaten (`Category` mit `purpose` & `color_state` 1..8, `Unit`, `Status` mit Sortier-`position`, `Role`), Personen, Assets, Dokumente, globale Suche (`/domain/`).
+- **`auth_kit`**: Login/Logout/Passwort/UserProfile (`/accounts/`, `LOGIN_URL = "auth_kit:login"`).
+- **`grid_kit`**: Für jede Listen-/Tabellenansicht `grid_kit.mixins.DataGridMixin` + Django `ListView` (`search_fields`, `allowed_sorts`, `export_fields`) für Suche, Sortierung, Paginierung und CSV/JSON-Export verwenden.
+- **`notify_kit`**: In-App-Benachrichtigungen, HTML-Mails & Webhooks (`/notifications/`).
+- **`cal_kit`**: Kalender, Monatsansicht, `.ics`-Feed & CalDAV (`/calendar/`).
+- **`seed_kit`**: Realistische Demo-Daten pro App in `<app>/seeders.py` mit `register_seeder(name, fn, order=..., reset_fn=...)` und `fake_name`, `fake_email`, `fake_amount`, `fake_date_offset`.
+- **`ops_kit`**: Healthcheck (`/healthz`), `AuditLog`, Backups (`manage.py ops_backup`, `/ops/`).
+
+## 3. Code- & Django-Standards
+- Alle User-Modelle über `settings.AUTH_USER_MODEL` referenzieren.
+- Jede schreibende View mit `@login_required` / `LoginRequiredMixin` absichern (sofern `auth_kit` aktiv ist).
+- CRUD-Formulare sauber als Bootstrap-5-Formulare/Modals oder Django-Generic-Views (`CreateView`, `UpdateView`, `DeleteView`) mit `messages.success(...)` umsetzen.
+- Für jedes neue Model sofort `makemigrations` + `migrate` ausführen und im Django-Admin registrieren.
+
+## 4. Pflicht-Verifikation vor Abschluss
+Jede Änderung oder neue App gilt erst als fertig, wenn alle folgenden Befehle fehlerfrei durchlaufen:
+1. `python manage.py check`
+2. `python manage.py makemigrations --check --dry-run`
+3. `python manage.py design_studio_doctor --strict`
+4. `python manage.py seed_demo --dry-run --count 5` (sofern `seed_kit` aktiv)
+5. `python manage.py test`
