@@ -7,18 +7,23 @@ from apps.core.views import dashboard_view
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("design-studio/", include("design_studio.urls")),
-{% if include_domain %}    path("domain/", include("domain_kit.urls")),
-{% endif %}{% if include_auth %}    path("accounts/", include("auth_kit.urls")),
-{% endif %}{% if include_notify %}    path("notifications/", include("notify_kit.urls")),
-{% endif %}{% if include_cal %}    path("calendar/", include("cal_kit.urls")),
-{% endif %}{% if include_ops %}    path("ops/", include("ops_kit.urls")),
+{% if include_ops %}    path("ops/", include("ops_kit.urls")),
 {% endif %}]
 
 try:
-    from ops_kit.runtime import get_runtime_urlpatterns
-    urlpatterns += get_runtime_urlpatterns(settings.BASE_DIR, urlpatterns)
+    from ops_kit.runtime import get_runtime_urlpatterns, optional_kit_path
+{% if include_domain %}    urlpatterns += optional_kit_path("domain_kit", "domain/", "domain_kit.urls")
+{% endif %}{% if include_auth %}    urlpatterns += optional_kit_path("auth_kit", "accounts/", "auth_kit.urls")
+{% endif %}{% if include_notify %}    urlpatterns += optional_kit_path("notify_kit", "notifications/", "notify_kit.urls")
+{% endif %}{% if include_cal %}    urlpatterns += optional_kit_path("cal_kit", "calendar/", "cal_kit.urls")
+{% endif %}    urlpatterns += get_runtime_urlpatterns(settings.BASE_DIR, urlpatterns)
 except ImportError:
-    pass
+    urlpatterns += [
+{% if include_domain %}        path("domain/", include("domain_kit.urls")),
+{% endif %}{% if include_auth %}        path("accounts/", include("auth_kit.urls")),
+{% endif %}{% if include_notify %}        path("notifications/", include("notify_kit.urls")),
+{% endif %}{% if include_cal %}        path("calendar/", include("cal_kit.urls")),
+{% endif %}    ]
 
 urlpatterns += [
     path("", dashboard_view, name="home"),

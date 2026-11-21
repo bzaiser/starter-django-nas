@@ -61,6 +61,14 @@ TEMPLATES = [{
     },
 }]
 
+try:
+    from ops_kit.runtime import filter_runtime_context_processors
+    TEMPLATES[0]["OPTIONS"]["context_processors"] = filter_runtime_context_processors(
+        TEMPLATES[0]["OPTIONS"]["context_processors"], INSTALLED_APPS
+    )
+except ImportError:
+    pass
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
