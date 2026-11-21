@@ -9,6 +9,9 @@ if [ -d .git ] && git rev-parse --verify HEAD >/dev/null 2>&1; then
     git pull origin "$(git rev-parse --abbrev-ref HEAD)" 2>/dev/null || true
 fi
 
+# Ensure all requirements are installed in the container before running management commands
+docker compose --env-file .env exec -u 0 web pip install --no-cache-dir -r requirements.txt 2>/dev/null || true
+
 if docker compose --env-file .env exec web python manage.py help ops_auto_update >/dev/null 2>&1; then
     OUT=$(docker compose --env-file .env exec web python manage.py ops_auto_update --force --apply)
     echo "$OUT"
