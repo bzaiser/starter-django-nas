@@ -45,3 +45,16 @@ Jede Änderung oder neue App gilt erst als fertig, wenn alle folgenden Befehle f
 3. `python manage.py design_studio_doctor --strict`
 4. `python manage.py seed_demo --dry-run --count 5` (sofern `seed_kit` aktiv)
 5. `python manage.py test`
+
+## 5. NAS-, Docker- & Persistenz-Regeln (VERBINDLICH)
+- **VERBOT nicht-persistenter Terminal-Fixes:** Niemals Befehle anbieten, die Pakete oder Dateien nur flüchtig im laufenden Container verändern (z. B. `docker compose exec ... pip install` nach `site-packages` oder manuelle Edits im Container). Fixes gehören **immer** persistent ins Git-Repo (`commit` + `push` → `./docker/update-fast.sh`). Ist ausnahmsweise ein temporärer Notfall-Befehl im Terminal unvermeidbar, muss er unübersehbar mit `[NICHT PERSISTENT]` markiert werden — bevorzugt gar nicht erst anbieten.
+- **Einziger persistenter Kit-Pfad (`/opt/ds-pkg`):**
+  - Jede Baukasten-App MUSS in `docker-compose.yml` das Named Volume `ds_pkg:/opt/ds-pkg` sowie `.:/app` und `./data:/app/data` mounten und `PYTHONPATH=/opt/ds-pkg` + `DESIGN_STUDIO_TARGET=/opt/ds-pkg` setzen.
+  - Jedes `Dockerfile` MUSS `ENV PYTHONPATH=/opt/ds-pkg` und `ENV DESIGN_STUDIO_TARGET=/opt/ds-pkg` setzen sowie `RUN mkdir -p /opt/ds-pkg && chmod 777 /opt/ds-pkg` ausführen (funktioniert für `root`, `app` und `appuser`).
+  - Alle Baukasten-Kits (`django-design-studio`, `*-django-kit`) werden zur Laufzeit **ausschließlich** über `python manage.py ops_sync_kits` bzw. `ops_kit` nach `/opt/ds-pkg` installiert — niemals doppelt in `site-packages`!
+- **Kein Laufzeit-Editieren von `settings.py` / `urls.py`:** Nachinstallierte Kits werden ausschließlich in `data/installed_kits.json` gespeichert und über `ops_kit.runtime` geladen. Niemals `git checkout -- settings.py` in Update-Skripten verwenden.
+- **Einheitliches `docker/update-fast.sh` & `docker/update.sh`:** Alle Baukasten-Apps nutzen das identische Standard-Skript (inkl. `ops_sync_kits`, automatischer Erkennung von `migrate_all` vs. `migrate`, `compilemessages` falls `locale/` existiert, `collectstatic` und `chmod -R a+rX .`). Keine app-spezifischen Sonder-Hacks (`DS_COMMIT_FILE` etc.).
+- **Multi-Tenant & Migrations-Pflicht:**
+  - Vor jedem Push in einem Kit oder einer App zwingend `python manage.py makemigrations --check --dry-run` ausführen.
+  - In Multi-Tenant-Apps immer `migrate_all` statt `migrate` ausführen.
+  - Container-weite Kit-Commit-Hashes liegen zentral in `/opt/ds-pkg/.kit_commits.json`; `ops_kit.UpdateSettings` nutzt immer `using("default")`.

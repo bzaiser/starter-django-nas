@@ -25,6 +25,12 @@ INSTALLED_APPS = [
 {% endif %}    "apps.core",
 ]
 
+try:
+    from ops_kit.runtime import apply_runtime_installed_apps
+    apply_runtime_installed_apps(INSTALLED_APPS, BASE_DIR)
+except ImportError:
+    pass
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",

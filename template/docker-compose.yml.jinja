@@ -10,9 +10,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
+      - .:/app
+      - ./data:/app/data
       - ds_pkg:/opt/ds-pkg
-      - app_data:/app/data
 
 volumes:
   ds_pkg:
-  app_data:

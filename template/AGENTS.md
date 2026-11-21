@@ -13,5 +13,10 @@
    - Demo-Daten: `<app>/seeders.py` + `seed_kit` (`seed-django-kit`)
    - Healthcheck/Audit/Backup: `ops_kit` (`ops-django-kit`)
 3. **Verifikation vor Commit:**
+   - `python manage.py makemigrations --check --dry-run`
    - `python manage.py design_studio_doctor --strict`
    - `python manage.py test`
+4. **Docker- & Update-Persistenz (VERBINDLICH):**
+   - Niemals nicht-persistente Terminal-Fixes (`docker compose exec ... pip install` nach `site-packages`) anbieten — Fixes gehören immer ins Git-Repo + `./docker/update-fast.sh`.
+   - Alle Baukasten-Kits liegen persistent im Named Volume `ds_pkg:/opt/ds-pkg` (`PYTHONPATH=/opt/ds-pkg`, `DESIGN_STUDIO_TARGET=/opt/ds-pkg`) und werden ausschließlich via `ops_sync_kits` synchronisiert.
+   - Dynamisch nachinstallierte Kits stehen in `data/installed_kits.json` (geladen über `ops_kit.runtime`), niemals `settings.py` oder `urls.py` zur Laufzeit editieren.

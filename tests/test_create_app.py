@@ -40,6 +40,9 @@ class CreateAppTests(unittest.TestCase):
             dc_text = (dest / "docker-compose.yml").read_text(encoding="utf-8")
             self.assertIn('"8090:8000"', dc_text)
             self.assertIn("container_name: demo_nas", dc_text)
+            self.assertIn("ds_pkg:/opt/ds-pkg", dc_text)
+            self.assertIn(".:/app", dc_text)
+            self.assertIn("./data:/app/data", dc_text)
 
             req_text = (dest / "requirements.txt").read_text(encoding="utf-8")
             self.assertIn("auth-django-kit", req_text)
@@ -47,9 +50,20 @@ class CreateAppTests(unittest.TestCase):
             self.assertNotIn("notify-django-kit", req_text)
             self.assertNotIn("seed-django-kit", req_text)
 
+            settings_text = (dest / "config" / "settings.py").read_text(encoding="utf-8")
+            self.assertIn("apply_runtime_installed_apps", settings_text)
+
             urls_text = (dest / "config" / "urls.py").read_text(encoding="utf-8")
             self.assertIn("cal_kit.urls", urls_text)
+            self.assertIn("get_runtime_urlpatterns", urls_text)
             self.assertNotIn("notify_kit.urls", urls_text)
+
+            uf_text = (dest / "docker" / "update-fast.sh").read_text(encoding="utf-8")
+            self.assertIn("ops_sync_kits", uf_text)
+            self.assertTrue((dest / "docker" / "update.sh").exists())
+
+            skill_text = (dest / ".agents" / "skills" / "django-baukasten" / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("VERBOT nicht-persistenter Terminal-Fixes", skill_text)
 
 
 if __name__ == "__main__":

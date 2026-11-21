@@ -2,7 +2,10 @@
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/opt/ds-pkg \
+    DESIGN_STUDIO_TARGET=/opt/ds-pkg \
+    PIP_CACHE_DIR=/tmp/pip-cache
 
 WORKDIR /app
 
@@ -16,7 +19,8 @@ COPY --chown=appuser:appuser . .
 RUN sed -i 's/\r$//' /app/entrypoint.sh \
     && chmod +x /app/entrypoint.sh \
     && mkdir -p /app/staticfiles /app/data /opt/ds-pkg \
-    && chown -R appuser:appuser /app /opt/ds-pkg
+    && chown -R appuser:appuser /app /opt/ds-pkg \
+    && chmod 777 /opt/ds-pkg
 
 USER appuser
 EXPOSE 8000
