@@ -1,51 +1,34 @@
+param(
+    [string]$SshHost = ""
+)
 $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent $PSScriptRoot
 Set-Location $RootDir
 New-Item -ItemType Directory -Force -Path "$RootDir\dist" | Out-Null
-
-$Cli = $null
-$Kind = $null
-if (Get-Command docker -ErrorAction SilentlyContinue) {
-    $Cli = (Get-Command docker).Source
-    $Kind = "docker"
-} elseif (Test-Path "C:\Program Files\Docker\Docker\resources\bin\docker.exe") {
-    $Cli = "C:\Program Files\Docker\Docker\resources\bin\docker.exe"
-    $Kind = "docker"
-} elseif (Get-Command podman -ErrorAction SilentlyContinue) {
-    $Cli = (Get-Command podman).Source
-    $Kind = "podman"
-} elseif (Test-Path "C:\Program Files\RedHat\Podman\podman.exe") {
-    $Cli = "C:\Program Files\RedHat\Podman\podman.exe"
-    $Kind = "podman"
-} else {
-    Write-Error "Weder Docker Desktop noch Podman auf diesem PC gefunden."
-    exit 1
-}
-
-if ($Kind -eq "podman") {
-    $MachineInfo = & $Cli machine list --format "{{.Running}}" 2>$null
-    if (-not $MachineInfo) {
-        Write-Host "⚙️ Initialisiere & starte Podman-VM..." -ForegroundColor Yellow
-        & $Cli machine init --now
-    } elseif ($MachineInfo -notmatch "true") {
-        Write-Host "▶️ Starte Podman-VM..." -ForegroundColor Yellow
-        & $Cli machine start
-    }
-}
-
-Write-Host "🔨 Baue Container-Image {{ project_slug }}:latest (linux/amd64) mit $Kind..." -ForegroundColor Cyan
-& $Cli build --platform linux/amd64 -t "{{ project_slug }}:latest" .
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
 $TarPath = "$RootDir\dist\{{ project_slug }}-image.tar"
-if (Test-Path $TarPath) { Remove-Item -Force $TarPath }
-Write-Host "📦 Exportiere Image nach $TarPath ..." -ForegroundColor Cyan
-if ($Kind -eq "podman") {
-    & $Cli save --format docker-archive -o $TarPath "{{ project_slug }}:latest"
-} else {
-    & $Cli save -o $TarPath "{{ project_slug }}:latest"
-}
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "✅ Fertig! Kopiere dist\{{ project_slug }}-image.tar in den App-Ordner auf dem NAS und starte dort:" -ForegroundColor Green
-Write-Host "   ./docker/load-nas-image.sh"
+if ($SshHost) {
+    Write-Host "🌐 Baue Image {{ project_slug }}:latest per SSH auf Linux-VM ($SshHost)..." -ForegroundColor Cyan
+    $RemoteTmp = "/tmp/build_{{ project_slug }}"
+    ssh $SshHost "rm -rf $RemoteTmp && mkdir -p $RemoteTmp"
+    scp Dockerfile requirements.txt entrypoint.sh manage.py "${SshHost}:${RemoteTmp}/"
+    scp -r config apps templates "${SshHost}:${RemoteTmp}/"
+    ssh $SshHost "cd $RemoteTmp && docker build --platform linux/amd64 -t {{ project_slug }}:latest . && docker save -o $RemoteTmp/{{ project_slug }}-image.tar {{ project_slug }}:latest"
+    scp "${SshHost}:${RemoteTmp}/{{ project_slug }}-image.tar" $TarPath
+    ssh $SshHost "rm -rf $RemoteTmp"
+    Write-Host "✅ Image von Linux-VM gespeichert unter: $TarPath" -ForegroundColor Green
+    Write-Host "   Auf dem NAS starten mit: ./docker/load-nas-image.sh"
+    exit 0
+}
+
+if (Get-Command docker -ErrorAction SilentlyContinue) {
+    docker build --platform linux/amd64 -t "{{ project_slug }}:latest" .
+    if (Test-Path $TarPath) { Remove-Item -Force $TarPath }
+    docker save -o $TarPath "{{ project_slug }}:latest"
+    Write-Host "✅ Fertig: $TarPath" -ForegroundColor Green
+} else {
+    Write-Host "ℹ️ Kein lokaler Docker-Daemon unter Windows aktiv." -ForegroundColor Yellow
+    Write-Host "Option A (empfohlen, 0 Sek. Build): App-Ordner direkt aufs NAS kopieren & ./docker/update-fast.sh starten (nutzt dort automatisch das vorhandene Baukasten-Basis-Image!)." -ForegroundColor Green
+    Write-Host "Option B (Build über deine Linux-VM per SSH):" -ForegroundColor Cyan
+    Write-Host "   .\docker\build-pc-image.ps1 -SshHost user@<linux-vm-ip>"
+}

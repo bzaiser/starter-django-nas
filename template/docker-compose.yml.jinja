@@ -3,6 +3,7 @@ services:
     image: {{ project_slug }}:latest
     build: .
     container_name: {{ project_slug }}
+    command: sh /app/entrypoint.sh
     restart: unless-stopped
     env_file: .env
     environment:

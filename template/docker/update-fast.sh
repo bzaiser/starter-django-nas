@@ -59,6 +59,24 @@ get_web_state() {
     fi
 }
 
+# 2b. First-run image bootstrap on NAS (reuse existing Baukasten image in 0.1s or build once on NAS)
+IMG_NAME=$(grep -E '^\s*image:\s*' docker-compose.yml 2>/dev/null | head -n1 | awk '{print $2}' | tr -d '\r"' || echo "")
+if [ -n "$IMG_NAME" ] && ! docker image inspect "$IMG_NAME" >/dev/null 2>&1; then
+    REUSED=""
+    for base_img in "sammlungsverwaltung-web:latest" "finanzplan-web:latest" "gewicht-web:latest"; do
+        if docker image inspect "$base_img" >/dev/null 2>&1; then
+            echo "♻️  Nutze vorhandenes Baukasten-Basis-Image ($base_img -> $IMG_NAME)..."
+            docker tag "$base_img" "$IMG_NAME"
+            REUSED="$base_img"
+            break
+        fi
+    done
+    if [ -z "$REUSED" ]; then
+        echo "🔨 Erstinstallation: Baue Docker-Image $IMG_NAME direkt auf dem NAS..."
+        docker compose $ENV_ARG build
+    fi
+fi
+
 # 3. Ensure persistent /opt/ds-pkg volume is writable & bootstrapped BEFORE starting web
 # (Prevents restart-loops when attaching a fresh empty ds_pkg volume to an older image!)
 STATE=$(get_web_state)

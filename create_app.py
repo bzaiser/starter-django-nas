@@ -96,68 +96,7 @@ def generate_app(cfg: dict) -> Path:
         except Exception:
             pass
 
-    if cfg.get("build_pc_image", False):
-        try:
-            build_and_export_pc_image(dest, cfg["project_slug"])
-        except Exception as exc:
-            cfg["_image_build_error"] = str(exc)
-
     return dest
-
-
-def _find_container_cli() -> tuple[str, str] | tuple[None, None]:
-    """Return (binary_path, 'docker'|'podman') or (None, None)."""
-    for name, win_paths in (
-        ("docker", [r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"]),
-        ("podman", [r"C:\Program Files\RedHat\Podman\podman.exe"]),
-    ):
-        found = shutil.which(name)
-        if found:
-            return found, name
-        for wp in win_paths:
-            if Path(wp).exists():
-                return wp, name
-    return None, None
-
-
-def build_and_export_pc_image(dest: Path, project_slug: str) -> Path:
-    cli_bin, cli_kind = _find_container_cli()
-    if not cli_bin:
-        raise RuntimeError(
-            "Weder Docker Desktop (docker.exe) noch Podman (podman.exe) wurde auf diesem PC gefunden."
-        )
-    dist_dir = dest / "dist"
-    dist_dir.mkdir(parents=True, exist_ok=True)
-    image_tag = f"{project_slug}:latest"
-    tar_path = dist_dir / f"{project_slug}-image.tar"
-    if tar_path.exists():
-        tar_path.unlink()
-
-    build_proc = subprocess.run(
-        [cli_bin, "build", "--platform", "linux/amd64", "-t", image_tag, "."],
-        cwd=dest,
-        capture_output=True,
-        text=True,
-    )
-    if build_proc.returncode != 0:
-        err = (build_proc.stderr or build_proc.stdout or "").strip()
-        if cli_kind == "podman" and ("machine" in err.lower() or "connect" in err.lower() or "pipe" in err.lower()):
-            raise RuntimeError(
-                "Podman ist installiert, aber die Podman-VM läuft noch nicht.\n"
-                "Bitte einmalig in PowerShell ausführen:\n"
-                "  podman machine init --now\n"
-                "(oder 'podman machine start') und danach .\\docker\\build-pc-image.ps1 starten."
-            )
-        raise RuntimeError(f"Container-Build ({cli_kind}) fehlgeschlagen:\n{err[:500]}")
-
-    save_cmd = [cli_bin, "save", "-o", str(tar_path), image_tag]
-    if cli_kind == "podman":
-        save_cmd = [cli_bin, "save", "--format", "docker-archive", "-o", str(tar_path), image_tag]
-    save_proc = subprocess.run(save_cmd, cwd=dest, capture_output=True, text=True)
-    if save_proc.returncode != 0:
-        err = (save_proc.stderr or save_proc.stdout or "").strip()
-        raise RuntimeError(f"Image-Export ({cli_kind} save) fehlgeschlagen:\n{err[:500]}")
-    return tar_path
 
 
 def run_cli_wizard() -> dict:
@@ -179,7 +118,6 @@ def run_cli_wizard() -> dict:
     csrf_origins = input(f"CSRF_TRUSTED_ORIGINS [{default_csrf}]: ").strip() or default_csrf
     github_repo = input("GitHub-Repo für In-App Updates (optional, z.B. bzaiser/meine-app) []: ").strip()
     debug = input("DJANGO_DEBUG? (j/N) [N]: ").strip().lower() in ("j", "y", "ja", "yes")
-    build_pc_image = input("Docker-Image jetzt am PC bauen & als .tar für NAS exportieren? (j/N) [N]: ").strip().lower() in ("j", "y", "ja", "yes")
 
     cfg = {
         "app_name": app_name,
@@ -190,7 +128,6 @@ def run_cli_wizard() -> dict:
         "csrf_origins": csrf_origins,
         "github_repo": github_repo,
         "debug": debug,
-        "build_pc_image": build_pc_image,
         "secret_key": secrets.token_urlsafe(48),
         "init_git": True,
     }
@@ -209,7 +146,7 @@ def run_gui_wizard() -> dict | None:
     result = {}
     root = tk.Tk()
     root.title("Django NAS App-Baukasten")
-    root.geometry("600x630")
+    root.geometry("600x600")
     root.resizable(False, False)
 
     frm = ttk.Frame(root, padding=16)
@@ -224,7 +161,6 @@ def run_gui_wizard() -> dict | None:
     repo_var = tk.StringVar(value="")
     debug_var = tk.BooleanVar(value=False)
     git_var = tk.BooleanVar(value=True)
-    build_img_var = tk.BooleanVar(value=False)
 
     def add_row(row, label, var, browse=False):
         ttk.Label(frm, text=label).grid(row=row, column=0, sticky="w", pady=3)
@@ -262,8 +198,6 @@ def run_gui_wizard() -> dict | None:
     r += 1
     ttk.Checkbutton(frm, text="Git-Repository direkt initialisieren", variable=git_var).grid(row=r, column=0, columnspan=3, sticky="w")
     r += 1
-    ttk.Checkbutton(frm, text="Docker-Image direkt am PC bauen & als .tar für NAS exportieren", variable=build_img_var).grid(row=r, column=0, columnspan=3, sticky="w")
-    r += 1
 
     def on_create():
         result.update({
@@ -276,25 +210,19 @@ def run_gui_wizard() -> dict | None:
             "github_repo": repo_var.get().strip(),
             "debug": debug_var.get(),
             "init_git": git_var.get(),
-            "build_pc_image": build_img_var.get(),
             "secret_key": secrets.token_urlsafe(48),
         })
         for k, v in kit_vars.items():
             result[k] = v.get()
         try:
             dest = generate_app(result)
-            msg = f"App erstellt unter:\n{dest}\n\n"
-            if result.get("_image_build_error"):
-                messagebox.showwarning(
-                    "App erstellt (Image-Build Hinweis)",
-                    msg + f"Die App-Dateien sind komplett fertig, aber der PC-Image-Build konnte noch nicht ausgeführt werden:\n\n{result['_image_build_error']}",
-                )
-            elif result["build_pc_image"]:
-                msg += f"PC-Image exportiert nach:\n{dest / 'dist' / (result['project_slug'] + '-image.tar')}\n\nAuf dem NAS starten mit:\n./docker/load-nas-image.sh"
-                messagebox.showinfo("Fertig", msg)
-            else:
-                msg += "Am PC Image für NAS bauen:\n.\\docker\\build-pc-image.ps1\n\nAuf dem NAS starten:\n./docker/load-nas-image.sh (oder ./docker/update-fast.sh)"
-                messagebox.showinfo("Fertig", msg)
+            messagebox.showinfo(
+                "Fertig",
+                f"App erstellt unter:\n{dest}\n\n"
+                "Ordner aufs NAS kopieren (oder via GitHub klonen) und dort einfach starten mit:\n"
+                "./docker/update-fast.sh\n\n"
+                "(Nutzt auf dem NAS sofort das vorhandene Baukasten-Basis-Image — kein WSL/Docker am PC nötig!)",
+            )
             root.destroy()
         except Exception as exc:
             messagebox.showerror("Fehler", str(exc))
