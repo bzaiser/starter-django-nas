@@ -26,6 +26,7 @@ KITS = [
 ]
 
 IF_BLOCK_RE = re.compile(r"\{%\s*if\s+(\w+)\s*%\}(.*?)\{%\s*endif\s*%\}", re.DOTALL)
+ELSE_SPLIT_RE = re.compile(r"\{%\s*else\s*%\}")
 VAR_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
 
 
@@ -185,7 +186,10 @@ def init_commit_and_push_git(dest: Path, cfg: dict) -> list[str]:
 def render_template_text(text: str, ctx: dict) -> str:
     def _eval_if(match):
         key, body = match.group(1), match.group(2)
-        return body if ctx.get(key) else ""
+        parts = ELSE_SPLIT_RE.split(body, maxsplit=1)
+        if ctx.get(key):
+            return parts[0]
+        return parts[1] if len(parts) > 1 else ""
 
     prev = None
     while prev != text:
@@ -435,7 +439,16 @@ def run_gui_wizard() -> dict | None:
                 if gh and not result.get("_git_push_error")
                 else "./docker/update-fast.sh"
             )
-            msg = f"App erstellt unter:\n{dest}\n\n{notes_str}\n\nAuf dem NAS starten (0,1 Sek., kein Build!):\n{nas_cmd}"
+            try:
+                root.clipboard_clear()
+                root.clipboard_append(nas_cmd)
+                root.update()
+            except Exception:
+                pass
+            msg = (
+                f"App erstellt unter:\n{dest}\n\n{notes_str}\n\n"
+                f"Auf dem NAS starten (in die Zwischenablage kopiert!):\n{nas_cmd}"
+            )
             if result.get("_git_push_error"):
                 messagebox.showwarning("App erstellt (GitHub-Push Hinweis)", msg)
             else:
