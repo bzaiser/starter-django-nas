@@ -59,21 +59,39 @@ get_web_state() {
     fi
 }
 
-# 2b. First-run image bootstrap on NAS (reuse existing Baukasten image in 0.1s or build once on NAS)
+# 2b. First-run image bootstrap on NAS: reuse existing Baukasten image in 0.1s (NEVER build in update-fast.sh!)
 IMG_NAME=$(grep -E '^\s*image:\s*' docker-compose.yml 2>/dev/null | head -n1 | awk '{print $2}' | tr -d '\r"' || echo "")
 if [ -n "$IMG_NAME" ] && ! docker image inspect "$IMG_NAME" >/dev/null 2>&1; then
     REUSED=""
-    for base_img in "sammlungsverwaltung-web:latest" "finanzplan-web:latest" "gewicht-web:latest"; do
+    for base_img in \
+        "sammlungsverwaltung-image:latest" "sammlungsverwaltung-image" \
+        "finanzplan-image:latest" "finanzplan-image" \
+        "finanzplan-broker-image:latest" "finanzplan-broker-image" \
+        "buckezz_image:latest" "buckezz_image" \
+        "gewicht-web:latest" "vitalog-web:latest" \
+        "sammlungsverwaltung-web:latest" "finanzplan-web:latest"; do
         if docker image inspect "$base_img" >/dev/null 2>&1; then
-            echo "♻️  Nutze vorhandenes Baukasten-Basis-Image ($base_img -> $IMG_NAME)..."
+            echo "♻️  Nutze vorhandenes Baukasten-Basis-Image ($base_img -> $IMG_NAME) — kein Build!"
             docker tag "$base_img" "$IMG_NAME"
             REUSED="$base_img"
             break
         fi
     done
+    # Fallback: auto-detect image from any running Baukasten container on the NAS
     if [ -z "$REUSED" ]; then
-        echo "🔨 Erstinstallation: Baue Docker-Image $IMG_NAME direkt auf dem NAS..."
-        docker compose $ENV_ARG build
+        for cand_img in $(docker ps --format '{{.Image}}' 2>/dev/null || true); do
+            if docker image inspect "$cand_img" 2>/dev/null | grep -q "/opt/ds-pkg"; then
+                echo "♻️  Nutze laufendes Baukasten-Image ($cand_img -> $IMG_NAME) — kein Build!"
+                docker tag "$cand_img" "$IMG_NAME"
+                REUSED="$cand_img"
+                break
+            fi
+        done
+    fi
+    if [ -z "$REUSED" ]; then
+        echo "❌ Kein vorhandenes Baukasten-Image ($IMG_NAME) auf dem NAS gefunden."
+        echo "   Bitte entweder ./docker/load-nas-image.sh nutzen oder einmalig ./docker/update.sh ausführen."
+        exit 1
     fi
 fi
 
@@ -100,8 +118,8 @@ if [ "$NO_KITS" = "0" ]; then
     fi
 fi
 
-# 4. Start/update container & wait until running (not restarting)
-docker compose $ENV_ARG up -d
+# 4. Start/update container & wait until running (not restarting) — --no-build guarantees zero image build!
+docker compose $ENV_ARG up -d --no-build
 for i in 1 2 3 4 5 6 7 8 9 10; do
     STATE=$(get_web_state)
     [ "$STATE" = "running" ] && break

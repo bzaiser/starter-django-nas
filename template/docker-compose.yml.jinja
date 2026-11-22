@@ -1,7 +1,6 @@
 services:
   web:
     image: {{ project_slug }}:latest
-    build: .
     container_name: {{ project_slug }}
     command: sh /app/entrypoint.sh
     restart: unless-stopped
