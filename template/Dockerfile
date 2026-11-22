@@ -10,6 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/* \
+    && git config --system --add safe.directory '*' \
     && useradd -m -u 1000 appuser
 
 COPY requirements.txt .
@@ -20,7 +21,7 @@ RUN sed -i 's/\r$//' /app/entrypoint.sh \
     && chmod +x /app/entrypoint.sh \
     && mkdir -p /app/staticfiles /app/data /opt/ds-pkg \
     && chown -R appuser:appuser /app /opt/ds-pkg \
-    && chmod 777 /opt/ds-pkg
+    && chmod -R a+rwX /opt/ds-pkg /app/staticfiles
 
 USER appuser
 EXPOSE 8000

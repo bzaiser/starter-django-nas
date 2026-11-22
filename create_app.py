@@ -57,6 +57,11 @@ def generate_app(cfg: dict) -> Path:
         if rel.name.endswith(".jinja"):
             rendered = render_template_text(src.read_text(encoding="utf-8"), cfg)
             _write_lf(out_path, rendered)
+            if out_path.suffix == ".sh":
+                try:
+                    os.chmod(out_path, 0o755)
+                except OSError:
+                    pass
         else:
             shutil.copy2(src, out_path)
             if out_path.suffix == ".sh":
@@ -66,12 +71,14 @@ def generate_app(cfg: dict) -> Path:
                 except OSError:
                     pass
 
+    github_repo = str(cfg.get("github_repo") or "").strip()
     env_content = (
         f"DJANGO_SECRET_KEY={cfg['secret_key']}\n"
         f"DJANGO_DEBUG={'True' if cfg['debug'] else 'False'}\n"
         f"DJANGO_ALLOWED_HOSTS={cfg['allowed_hosts']}\n"
         f"CSRF_TRUSTED_ORIGINS={cfg['csrf_origins']}\n"
         f"DESIGN_STUDIO_APP_NAME={cfg['app_name']}\n"
+        f"OPS_GITHUB_REPO={github_repo}\n"
     )
     _write_lf(dest / ".env", env_content)
 
@@ -85,7 +92,28 @@ def generate_app(cfg: dict) -> Path:
     if cfg.get("init_git", True):
         subprocess.run(["git", "init", "-b", "main"], cwd=dest, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+    if cfg.get("build_pc_image", False):
+        build_and_export_pc_image(dest, cfg["project_slug"])
+
     return dest
+
+
+def build_and_export_pc_image(dest: Path, project_slug: str) -> Path:
+    dist_dir = dest / "dist"
+    dist_dir.mkdir(parents=True, exist_ok=True)
+    image_tag = f"{project_slug}:latest"
+    tar_path = dist_dir / f"{project_slug}-image.tar"
+    subprocess.run(
+        ["docker", "build", "--platform", "linux/amd64", "-t", image_tag, "."],
+        cwd=dest,
+        check=True,
+    )
+    subprocess.run(
+        ["docker", "save", "-o", str(tar_path), image_tag],
+        cwd=dest,
+        check=True,
+    )
+    return tar_path
 
 
 def run_cli_wizard() -> dict:
@@ -105,7 +133,9 @@ def run_cli_wizard() -> dict:
     allowed_hosts = input("ALLOWED_HOSTS [*]: ").strip() or "*"
     default_csrf = f"http://localhost:{port}"
     csrf_origins = input(f"CSRF_TRUSTED_ORIGINS [{default_csrf}]: ").strip() or default_csrf
+    github_repo = input("GitHub-Repo für In-App Updates (optional, z.B. bzaiser/meine-app) []: ").strip()
     debug = input("DJANGO_DEBUG? (j/N) [N]: ").strip().lower() in ("j", "y", "ja", "yes")
+    build_pc_image = input("Docker-Image jetzt am PC bauen & als .tar für NAS exportieren? (j/N) [N]: ").strip().lower() in ("j", "y", "ja", "yes")
 
     cfg = {
         "app_name": app_name,
@@ -114,7 +144,9 @@ def run_cli_wizard() -> dict:
         "port": port,
         "allowed_hosts": allowed_hosts,
         "csrf_origins": csrf_origins,
+        "github_repo": github_repo,
         "debug": debug,
+        "build_pc_image": build_pc_image,
         "secret_key": secrets.token_urlsafe(48),
         "init_git": True,
     }
@@ -133,7 +165,7 @@ def run_gui_wizard() -> dict | None:
     result = {}
     root = tk.Tk()
     root.title("Django NAS App-Baukasten")
-    root.geometry("580x560")
+    root.geometry("600x630")
     root.resizable(False, False)
 
     frm = ttk.Frame(root, padding=16)
@@ -145,8 +177,10 @@ def run_gui_wizard() -> dict | None:
     port_var = tk.StringVar(value="8000")
     hosts_var = tk.StringVar(value="*")
     csrf_var = tk.StringVar(value="http://localhost:8000")
+    repo_var = tk.StringVar(value="")
     debug_var = tk.BooleanVar(value=False)
     git_var = tk.BooleanVar(value=True)
+    build_img_var = tk.BooleanVar(value=False)
 
     def add_row(row, label, var, browse=False):
         ttk.Label(frm, text=label).grid(row=row, column=0, sticky="w", pady=3)
@@ -165,12 +199,13 @@ def run_gui_wizard() -> dict | None:
     add_row(3, "Docker-Port:", port_var)
     add_row(4, "ALLOWED_HOSTS:", hosts_var)
     add_row(5, "CSRF_TRUSTED_ORIGINS:", csrf_var)
+    add_row(6, "GitHub-Repo (optional):", repo_var)
 
-    ttk.Separator(frm).grid(row=6, column=0, columnspan=3, sticky="ew", pady=10)
-    ttk.Label(frm, text="Module zum Anhaken:", font=("Segoe UI", 10, "bold")).grid(row=7, column=0, columnspan=3, sticky="w")
+    ttk.Separator(frm).grid(row=7, column=0, columnspan=3, sticky="ew", pady=10)
+    ttk.Label(frm, text="Module zum Anhaken:", font=("Segoe UI", 10, "bold")).grid(row=8, column=0, columnspan=3, sticky="w")
 
     kit_vars = {}
-    r = 8
+    r = 9
     for key, label, default in KITS:
         v = tk.BooleanVar(value=default)
         kit_vars[key] = v
@@ -183,6 +218,8 @@ def run_gui_wizard() -> dict | None:
     r += 1
     ttk.Checkbutton(frm, text="Git-Repository direkt initialisieren", variable=git_var).grid(row=r, column=0, columnspan=3, sticky="w")
     r += 1
+    ttk.Checkbutton(frm, text="Docker-Image direkt am PC bauen & als .tar für NAS exportieren", variable=build_img_var).grid(row=r, column=0, columnspan=3, sticky="w")
+    r += 1
 
     def on_create():
         result.update({
@@ -192,15 +229,22 @@ def run_gui_wizard() -> dict | None:
             "port": port_var.get().strip() or "8000",
             "allowed_hosts": hosts_var.get().strip() or "*",
             "csrf_origins": csrf_var.get().strip() or "http://localhost:8000",
+            "github_repo": repo_var.get().strip(),
             "debug": debug_var.get(),
             "init_git": git_var.get(),
+            "build_pc_image": build_img_var.get(),
             "secret_key": secrets.token_urlsafe(48),
         })
         for k, v in kit_vars.items():
             result[k] = v.get()
         try:
             dest = generate_app(result)
-            messagebox.showinfo("Fertig", f"App erstellt unter:\n{dest}\n\nStart mit: docker compose up --build")
+            msg = f"App erstellt unter:\n{dest}\n\n"
+            if result["build_pc_image"]:
+                msg += f"PC-Image exportiert nach:\n{dest / 'dist' / (result['project_slug'] + '-image.tar')}\n\nAuf dem NAS starten mit:\n./docker/load-nas-image.sh"
+            else:
+                msg += "Am PC Image für NAS bauen:\n.\\docker\\build-pc-image.ps1\n\nAuf dem NAS starten:\n./docker/load-nas-image.sh (oder ./docker/update-fast.sh)"
+            messagebox.showinfo("Fertig", msg)
             root.destroy()
         except Exception as exc:
             messagebox.showerror("Fehler", str(exc))

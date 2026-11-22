@@ -91,6 +91,7 @@ STORAGES = {
 }
 
 DESIGN_STUDIO_APP_NAME = os.environ.get("DESIGN_STUDIO_APP_NAME", "{{ app_name }}")
+OPS_GITHUB_REPO = os.environ.get("OPS_GITHUB_REPO", "{{ github_repo }}")
 DESIGN_STUDIO_MENU_ITEMS = [
     {"id": "home", "url_name": "home", "match_urls": ["home"], "default_label": "Übersicht", "icon": "bi-speedometer2", "zone": "main", "display": "icon_text", "visible": True, "order": 1},
 {% if include_domain %}    {"id": "master_data", "url_name": "domain_kit:settings", "match_urls": ["settings"], "default_label": "Stammdaten", "icon": "bi-tags", "zone": "main", "display": "icon_text", "visible": True, "order": 2},

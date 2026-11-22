@@ -1,0 +1,14 @@
+$ErrorActionPreference = "Stop"
+$RootDir = Split-Path -Parent $PSScriptRoot
+Set-Location $RootDir
+New-Item -ItemType Directory -Force -Path "$RootDir\dist" | Out-Null
+
+Write-Host "🔨 Baue Docker-Image {{ project_slug }}:latest (linux/amd64)..." -ForegroundColor Cyan
+docker build --platform linux/amd64 -t "{{ project_slug }}:latest" .
+
+$TarPath = "$RootDir\dist\{{ project_slug }}-image.tar"
+Write-Host "📦 Exportiere Image nach $TarPath ..." -ForegroundColor Cyan
+docker save -o $TarPath "{{ project_slug }}:latest"
+
+Write-Host "✅ Fertig! Kopiere dist\{{ project_slug }}-image.tar in den App-Ordner auf dem NAS und starte dort:" -ForegroundColor Green
+Write-Host "   ./docker/load-nas-image.sh"

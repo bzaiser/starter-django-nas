@@ -1,0 +1,30 @@
+#!/bin/bash
+# Laedt das am PC gebaute Docker-Image ({{ project_slug }}-image.tar) auf dem NAS
+# und startet anschliessend ./docker/update-fast.sh (inkl. /opt/ds-pkg Kit-Sync).
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$ROOT_DIR"
+
+TAR_FILE="${1:-}"
+if [ -z "$TAR_FILE" ]; then
+    for cand in "dist/{{ project_slug }}-image.tar" "{{ project_slug }}-image.tar"; do
+        if [ -f "$cand" ]; then
+            TAR_FILE="$cand"
+            break
+        fi
+    done
+fi
+
+if [ -z "$TAR_FILE" ] || [ ! -f "$TAR_FILE" ]; then
+    echo "❌ Keine Image-Datei gefunden (erwartet: {{ project_slug }}-image.tar oder dist/{{ project_slug }}-image.tar)"
+    exit 1
+fi
+
+echo "📥 Lade PC-Docker-Image aus $TAR_FILE ..."
+docker load -i "$TAR_FILE"
+
+echo "🚀 Starte ./docker/update-fast.sh ..."
+chmod +x ./docker/update-fast.sh 2>/dev/null || true
+./docker/update-fast.sh
