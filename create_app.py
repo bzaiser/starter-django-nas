@@ -90,29 +90,73 @@ def generate_app(cfg: dict) -> Path:
             _write_lf(dc, dc.read_text(encoding="utf-8").replace('"8000:8000"', f'"{port}:8000"'))
 
     if cfg.get("init_git", True):
-        subprocess.run(["git", "init", "-b", "main"], cwd=dest, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        git_bin = shutil.which("git") or r"C:\Program Files\Git\cmd\git.exe"
+        try:
+            subprocess.run([git_bin, "init", "-b", "main"], cwd=dest, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
 
     if cfg.get("build_pc_image", False):
-        build_and_export_pc_image(dest, cfg["project_slug"])
+        try:
+            build_and_export_pc_image(dest, cfg["project_slug"])
+        except Exception as exc:
+            cfg["_image_build_error"] = str(exc)
 
     return dest
 
 
+def _find_container_cli() -> tuple[str, str] | tuple[None, None]:
+    """Return (binary_path, 'docker'|'podman') or (None, None)."""
+    for name, win_paths in (
+        ("docker", [r"C:\Program Files\Docker\Docker\resources\bin\docker.exe"]),
+        ("podman", [r"C:\Program Files\RedHat\Podman\podman.exe"]),
+    ):
+        found = shutil.which(name)
+        if found:
+            return found, name
+        for wp in win_paths:
+            if Path(wp).exists():
+                return wp, name
+    return None, None
+
+
 def build_and_export_pc_image(dest: Path, project_slug: str) -> Path:
+    cli_bin, cli_kind = _find_container_cli()
+    if not cli_bin:
+        raise RuntimeError(
+            "Weder Docker Desktop (docker.exe) noch Podman (podman.exe) wurde auf diesem PC gefunden."
+        )
     dist_dir = dest / "dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
     image_tag = f"{project_slug}:latest"
     tar_path = dist_dir / f"{project_slug}-image.tar"
-    subprocess.run(
-        ["docker", "build", "--platform", "linux/amd64", "-t", image_tag, "."],
+    if tar_path.exists():
+        tar_path.unlink()
+
+    build_proc = subprocess.run(
+        [cli_bin, "build", "--platform", "linux/amd64", "-t", image_tag, "."],
         cwd=dest,
-        check=True,
+        capture_output=True,
+        text=True,
     )
-    subprocess.run(
-        ["docker", "save", "-o", str(tar_path), image_tag],
-        cwd=dest,
-        check=True,
-    )
+    if build_proc.returncode != 0:
+        err = (build_proc.stderr or build_proc.stdout or "").strip()
+        if cli_kind == "podman" and ("machine" in err.lower() or "connect" in err.lower() or "pipe" in err.lower()):
+            raise RuntimeError(
+                "Podman ist installiert, aber die Podman-VM läuft noch nicht.\n"
+                "Bitte einmalig in PowerShell ausführen:\n"
+                "  podman machine init --now\n"
+                "(oder 'podman machine start') und danach .\\docker\\build-pc-image.ps1 starten."
+            )
+        raise RuntimeError(f"Container-Build ({cli_kind}) fehlgeschlagen:\n{err[:500]}")
+
+    save_cmd = [cli_bin, "save", "-o", str(tar_path), image_tag]
+    if cli_kind == "podman":
+        save_cmd = [cli_bin, "save", "--format", "docker-archive", "-o", str(tar_path), image_tag]
+    save_proc = subprocess.run(save_cmd, cwd=dest, capture_output=True, text=True)
+    if save_proc.returncode != 0:
+        err = (save_proc.stderr or save_proc.stdout or "").strip()
+        raise RuntimeError(f"Image-Export ({cli_kind} save) fehlgeschlagen:\n{err[:500]}")
     return tar_path
 
 
@@ -240,11 +284,17 @@ def run_gui_wizard() -> dict | None:
         try:
             dest = generate_app(result)
             msg = f"App erstellt unter:\n{dest}\n\n"
-            if result["build_pc_image"]:
+            if result.get("_image_build_error"):
+                messagebox.showwarning(
+                    "App erstellt (Image-Build Hinweis)",
+                    msg + f"Die App-Dateien sind komplett fertig, aber der PC-Image-Build konnte noch nicht ausgeführt werden:\n\n{result['_image_build_error']}",
+                )
+            elif result["build_pc_image"]:
                 msg += f"PC-Image exportiert nach:\n{dest / 'dist' / (result['project_slug'] + '-image.tar')}\n\nAuf dem NAS starten mit:\n./docker/load-nas-image.sh"
+                messagebox.showinfo("Fertig", msg)
             else:
                 msg += "Am PC Image für NAS bauen:\n.\\docker\\build-pc-image.ps1\n\nAuf dem NAS starten:\n./docker/load-nas-image.sh (oder ./docker/update-fast.sh)"
-            messagebox.showinfo("Fertig", msg)
+                messagebox.showinfo("Fertig", msg)
             root.destroy()
         except Exception as exc:
             messagebox.showerror("Fehler", str(exc))

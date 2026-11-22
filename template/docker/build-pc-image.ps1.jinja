@@ -3,12 +3,49 @@ $RootDir = Split-Path -Parent $PSScriptRoot
 Set-Location $RootDir
 New-Item -ItemType Directory -Force -Path "$RootDir\dist" | Out-Null
 
-Write-Host "🔨 Baue Docker-Image {{ project_slug }}:latest (linux/amd64)..." -ForegroundColor Cyan
-docker build --platform linux/amd64 -t "{{ project_slug }}:latest" .
+$Cli = $null
+$Kind = $null
+if (Get-Command docker -ErrorAction SilentlyContinue) {
+    $Cli = (Get-Command docker).Source
+    $Kind = "docker"
+} elseif (Test-Path "C:\Program Files\Docker\Docker\resources\bin\docker.exe") {
+    $Cli = "C:\Program Files\Docker\Docker\resources\bin\docker.exe"
+    $Kind = "docker"
+} elseif (Get-Command podman -ErrorAction SilentlyContinue) {
+    $Cli = (Get-Command podman).Source
+    $Kind = "podman"
+} elseif (Test-Path "C:\Program Files\RedHat\Podman\podman.exe") {
+    $Cli = "C:\Program Files\RedHat\Podman\podman.exe"
+    $Kind = "podman"
+} else {
+    Write-Error "Weder Docker Desktop noch Podman auf diesem PC gefunden."
+    exit 1
+}
+
+if ($Kind -eq "podman") {
+    $MachineInfo = & $Cli machine list --format "{{.Running}}" 2>$null
+    if (-not $MachineInfo) {
+        Write-Host "⚙️ Initialisiere & starte Podman-VM..." -ForegroundColor Yellow
+        & $Cli machine init --now
+    } elseif ($MachineInfo -notmatch "true") {
+        Write-Host "▶️ Starte Podman-VM..." -ForegroundColor Yellow
+        & $Cli machine start
+    }
+}
+
+Write-Host "🔨 Baue Container-Image {{ project_slug }}:latest (linux/amd64) mit $Kind..." -ForegroundColor Cyan
+& $Cli build --platform linux/amd64 -t "{{ project_slug }}:latest" .
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $TarPath = "$RootDir\dist\{{ project_slug }}-image.tar"
+if (Test-Path $TarPath) { Remove-Item -Force $TarPath }
 Write-Host "📦 Exportiere Image nach $TarPath ..." -ForegroundColor Cyan
-docker save -o $TarPath "{{ project_slug }}:latest"
+if ($Kind -eq "podman") {
+    & $Cli save --format docker-archive -o $TarPath "{{ project_slug }}:latest"
+} else {
+    & $Cli save -o $TarPath "{{ project_slug }}:latest"
+}
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host "✅ Fertig! Kopiere dist\{{ project_slug }}-image.tar in den App-Ordner auf dem NAS und starte dort:" -ForegroundColor Green
 Write-Host "   ./docker/load-nas-image.sh"
