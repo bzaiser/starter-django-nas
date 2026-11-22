@@ -107,11 +107,23 @@ if [ "$NO_KITS" = "0" ]; then
     fi
     if [ "$NEED_BOOT" = "1" ]; then
         echo "  → Initial-Bootstrap der Baukasten-Kits nach /opt/ds-pkg..."
+        # Fast-path: clone pre-installed kits + .kit_commits.json from an existing *_ds_pkg volume on the NAS (0.5s, no GitHub download!)
+        DONOR_VOL=$(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E '_ds_pkg$' | grep -v "^$(basename "$ROOT_DIR")_ds_pkg$" | head -n1 || true)
+        TARGET_VOL=$(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E "^$(basename "$ROOT_DIR")_ds_pkg$" | head -n1 || true)
+        if [ -n "$DONOR_VOL" ] && [ -n "$TARGET_VOL" ] && [ -n "$IMG_NAME" ]; then
+            echo "  ⚡ Kopiere vorhandene Kits lokal aus Volume '$DONOR_VOL' (kein GitHub-Download nötig)..."
+            docker run --rm -u 0 -v "${DONOR_VOL}:/src:ro" -v "${TARGET_VOL}:/dst" --entrypoint "" "$IMG_NAME" sh -c 'cp -a /src/. /dst/ 2>/dev/null || true; chmod -R a+rwX /dst 2>/dev/null || true' || true
+        fi
         docker compose $ENV_ARG run --rm --no-deps -u 0 --entrypoint "" web sh -c '
             mkdir -p /opt/ds-pkg /app/staticfiles
-            grep -E "(django-design-studio|-django-kit)" /app/requirements.txt > /tmp/req_kits.txt || true
-            if [ -s /tmp/req_kits.txt ]; then
-                pip install -q --upgrade --force-reinstall --no-deps --no-cache-dir --root-user-action=ignore --target /opt/ds-pkg -r /tmp/req_kits.txt
+            if [ ! -f /opt/ds-pkg/.kit_commits.json ]; then
+                for url in $(grep -E "(django-design-studio|-django-kit)" /app/requirements.txt || true); do
+                    pkg_name=$(echo "$url" | sed -E "s|.*/([^/]+)/archive/.*|\1|")
+                    echo "  📦 Lade & installiere $pkg_name ..."
+                    pip install --upgrade --no-deps --no-cache-dir --root-user-action=ignore --target /opt/ds-pkg "$url" >/dev/null
+                done
+            else
+                echo "  ✓ Kits aus lokalem Cache übernommen."
             fi
             chmod -R a+rwX /opt/ds-pkg /app/staticfiles 2>/dev/null || true
         '
