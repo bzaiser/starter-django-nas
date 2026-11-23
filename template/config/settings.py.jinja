@@ -19,6 +19,8 @@ INSTALLED_APPS = [
 {% endif %}{% if include_auth %}    "auth_kit",
 {% endif %}{% if include_notify %}    "notify_kit",
 {% endif %}{% if include_cal %}    "cal_kit",
+{% endif %}{% if include_list %}    "list_kit",
+{% endif %}{% if include_site %}    "site_kit",
 {% endif %}{% if include_grid %}    "grid_kit",
 {% endif %}{% if include_seed %}    "seed_kit",
 {% endif %}{% if include_ops %}    "ops_kit",
@@ -100,6 +102,10 @@ DESIGN_STUDIO_MENU_ITEMS = [
     {"id": "documents", "url_name": "domain_kit:documents", "match_urls": ["documents"], "default_label": "Dokumente", "icon": "bi-folder2-open", "zone": "main", "display": "icon_text", "visible": True, "order": 5},
     {"id": "search", "url_name": "domain_kit:search", "match_urls": ["search"], "default_label": "Suche", "icon": "bi-search", "zone": "main", "display": "icon_text", "visible": True, "order": 6},
 {% endif %}{% if include_cal %}    {"id": "calendar", "url_name": "cal_kit:calendar", "match_urls": ["calendar"], "default_label": "Kalender", "icon": "bi-calendar3", "zone": "main", "display": "icon_text", "visible": True, "order": 7},
+{% endif %}{% if include_list %}    {"id": "lists", "url_name": "list_kit:collection_list", "match_urls": ["collection_list", "collection_detail", "collection_create"], "default_label": "Listen", "icon": "bi-list-check", "zone": "main", "display": "icon_text", "visible": True, "order": 8},
+    {"id": "list_builder", "url_name": "list_kit:builder_list", "match_urls": ["builder_list", "builder_create", "builder_edit"], "default_label": "Builder", "icon": "bi-sliders", "zone": "main", "display": "icon_text", "visible": True, "order": 9, "staff_only": True},
+{% endif %}{% if include_site %}    {"id": "site_manage", "url_name": "site_kit:manage", "match_urls": ["manage", "page_create", "page_edit"], "default_label": "Webseite", "icon": "bi-globe2", "zone": "main", "display": "icon_text", "visible": True, "order": 10, "staff_only": True},
+    {"id": "public_site", "url_name": "site_kit:home", "match_urls": [], "default_label": "Öffentliche Seite", "icon": "bi-box-arrow-up-right", "zone": "utility", "display": "icon_only", "visible": True, "order": 0},
 {% endif %}{% if include_notify %}    {"id": "notifications", "url_name": "notify_kit:inbox", "match_urls": ["inbox"], "default_label": "Meldungen", "icon": "bi-bell", "zone": "utility", "display": "icon_only", "visible": True, "order": 1},
 {% endif %}{% if include_auth %}    {"id": "profile", "url_name": "auth_kit:profile", "match_urls": ["profile"], "default_label": "Einstellungen", "icon": "bi-gear", "zone": "utility", "display": "icon_only", "visible": True, "order": 2, "locked": True},
 {% else %}    {"id": "design_studio", "url_name": "design_studio:studio", "match_urls": ["studio"], "default_label": "Design Studio", "icon": "bi-gear", "zone": "utility", "display": "icon_only", "visible": True, "order": 2, "locked": True},
@@ -108,6 +114,11 @@ DESIGN_STUDIO_MENU_ITEMS = [
 ]
 {% if include_auth %}
 LOGIN_URL = "auth_kit:login"
+{% endif %}
+{% if include_site %}
+LOGIN_REDIRECT_URL = "/app/"
+LOGOUT_REDIRECT_URL = "site_kit:home"
+{% else %}
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "auth_kit:login"
 {% endif %}

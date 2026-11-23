@@ -20,6 +20,8 @@ KITS = [
     ("include_auth", "auth-django-kit (Login, Passwort, Benutzerprofil)", True),
     ("include_notify", "notify-django-kit (Benachrichtigungen, HTML-Mails, Webhooks)", True),
     ("include_cal", "cal-django-kit (Kalender-UI, .ics-Feed, CalDAV)", False),
+    ("include_list", "list-django-kit (Dynamische Listen, Vorlagen-Builder, News, FAQ, Formular)", False),
+    ("include_site", "site-django-kit (Öffentliche Webseite / CMS mit festen Blöcken)", False),
     ("include_grid", "grid-django-kit (Tabellen, Suche, CSV/JSON-Export)", True),
     ("include_seed", "seed-django-kit (Demo-Seeding Framework)", True),
     ("include_ops", "ops-django-kit (Healthcheck /healthz, Audit-Log, Backup, In-App Updates)", True),

@@ -30,6 +30,16 @@ include_cal:
   help: cal-django-kit (Kalender & .ics-Feed) einbinden?
   default: false
 
+include_list:
+  type: bool
+  help: list-django-kit (Dynamische Listen, Vorlagen-Builder, News & Formular-Eingang) einbinden?
+  default: false
+
+include_site:
+  type: bool
+  help: site-django-kit (Öffentliche Webseite / CMS mit festen Inhaltsblöcken) einbinden?
+  default: false
+
 include_grid:
   type: bool
   help: grid-django-kit (Tabellen, Suche & CSV/JSON-Export) einbinden?
