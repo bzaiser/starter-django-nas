@@ -8,8 +8,8 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("design-studio/", include("design_studio.urls")),
 {% if include_ops %}    path("ops/", include("ops_kit.urls")),
-{% endif %}{% if include_site %}    path("app/", dashboard_view, name="home"),
-{% endif %}]
+{% endif %}    path("app/", dashboard_view, name="home" if "site_kit" in settings.INSTALLED_APPS else "app_home"),
+]
 
 try:
     from ops_kit.runtime import get_runtime_urlpatterns, optional_kit_path
@@ -30,6 +30,7 @@ try:
 {% endif %}{% if include_site %}        path("", include("site_kit.urls")),
 {% endif %}    ]
 
-{% if include_site %}{% else %}urlpatterns += [
-    path("", dashboard_view, name="home"),
-]{% endif %}
+if "site_kit" not in settings.INSTALLED_APPS:
+    urlpatterns += [
+        path("", dashboard_view, name="home"),
+    ]
