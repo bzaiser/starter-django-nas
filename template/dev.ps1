@@ -16,6 +16,10 @@ if (-not (Test-Path $py)) {
     $firstRun = $true
 }
 
+if (-not (Test-Path "data\media")) {
+    New-Item -ItemType Directory -Path "data\media" -Force | Out-Null
+}
+
 if (-not (Test-Path ".env") -and (Test-Path ".env.example")) {
     Copy-Item ".env.example" ".env"
     Write-Host "[ok] .env aus .env.example erstellt" -ForegroundColor Green
@@ -40,7 +44,7 @@ Write-Host "[3/4] Prüfe Migrationen..." -ForegroundColor Cyan
 & $py manage.py migrate --noinput
 
 $hasAdmin = & $py -c "import os, django; os.environ.setdefault('DJANGO_SETTINGS_MODULE','config.settings'); django.setup(); from django.contrib.auth import get_user_model; print(1 if get_user_model().objects.filter(is_superuser=True).exists() else 0)"
-if ($hasAdmin.Trim() -eq "0") {
+if ("$hasAdmin".Trim() -eq "0") {
     Write-Host "[!] Noch kein Admin vorhanden — bitte jetzt anlegen:" -ForegroundColor Yellow
     & $py manage.py createsuperuser
 }
