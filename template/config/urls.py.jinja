@@ -20,6 +20,7 @@ try:
 {% endif %}{% if include_notify %}    urlpatterns += optional_kit_path("notify_kit", "notifications/", "notify_kit.urls")
 {% endif %}{% if include_cal %}    urlpatterns += optional_kit_path("cal_kit", "calendar/", "cal_kit.urls")
 {% endif %}{% if include_list %}    urlpatterns += optional_kit_path("list_kit", "lists/", "list_kit.urls")
+{% endif %}{% if include_seed %}    urlpatterns += optional_kit_path("seed_kit", "seed/", "seed_kit.urls")
 {% endif %}    urlpatterns += get_runtime_urlpatterns(settings.BASE_DIR, urlpatterns)
 {% if include_site %}    urlpatterns += optional_kit_path("site_kit", "", "site_kit.urls")
 {% endif %}except ImportError:
@@ -29,6 +30,7 @@ try:
 {% endif %}{% if include_notify %}        path("notifications/", include("notify_kit.urls")),
 {% endif %}{% if include_cal %}        path("calendar/", include("cal_kit.urls")),
 {% endif %}{% if include_list %}        path("lists/", include("list_kit.urls")),
+{% endif %}{% if include_seed %}        path("seed/", include("seed_kit.urls")),
 {% endif %}{% if include_site %}        path("", include("site_kit.urls")),
 {% endif %}    ]
 
