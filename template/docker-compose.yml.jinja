@@ -1,7 +1,7 @@
 services:
   web:
-    image: {{ project_slug }}:latest
-    container_name: {{ project_slug }}
+    image: ${IMAGE_NAME:-{{ project_slug }}:latest}
+    container_name: ${CONTAINER_NAME:-{{ project_slug }}}
     command: sh /app/entrypoint.sh
     restart: unless-stopped
     env_file: .env
@@ -9,7 +9,7 @@ services:
       - PYTHONPATH=/opt/ds-pkg
       - DESIGN_STUDIO_TARGET=/opt/ds-pkg
     ports:
-      - "8000:8000"
+      - "${WEB_PORT:-8000}:8000"
     volumes:
       - .:/app
       - ./data:/app/data
