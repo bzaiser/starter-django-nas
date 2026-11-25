@@ -116,10 +116,13 @@ if [ "$NO_KITS" = "0" ]; then
         if [ -n "$TARGET_VOL" ] && [ -n "$IMG_NAME" ]; then
             for DONOR_VOL in $(docker volume ls --format '{{.Name}}' 2>/dev/null | grep -E '_ds_pkg$' | grep -v "^${TARGET_VOL}$" || true); do
                 echo "  ⚡ Übernehme gecachte Kits aus Volume '$DONOR_VOL'..."
-                docker run --rm -u 0 -v "${DONOR_VOL}:/src:ro" -v "${TARGET_VOL}:/dst" --entrypoint "" "$IMG_NAME" python -c "
-import json, os, shutil
+                if docker run --rm -u 0 -v "${DONOR_VOL}:/src:ro" -v "${TARGET_VOL}:/dst" --entrypoint "" "$IMG_NAME" python -c "
+import json, shutil, sys
 from pathlib import Path
 src, dst = Path('/src'), Path('/dst')
+sc, dc = src / '.kit_commits.json', dst / '.kit_commits.json'
+if not sc.exists():
+    sys.exit(1)
 dst.mkdir(parents=True, exist_ok=True)
 for item in src.iterdir():
     if item.name == '.kit_commits.json':
@@ -130,14 +133,15 @@ for item in src.iterdir():
             shutil.copytree(item, target)
         else:
             shutil.copy2(item, target)
-sc, dc = src / '.kit_commits.json', dst / '.kit_commits.json'
-if sc.exists():
-    sdata = json.loads(sc.read_text('utf-8')) if sc.exists() else {}
-    ddata = json.loads(dc.read_text('utf-8')) if dc.exists() else {}
-    for k, v in sdata.items():
-        ddata.setdefault(k, v)
-    dc.write_text(json.dumps(ddata, indent=2), 'utf-8')
-" 2>/dev/null || true
+sdata = json.loads(sc.read_text('utf-8'))
+ddata = json.loads(dc.read_text('utf-8')) if dc.exists() else {}
+for k, v in sdata.items():
+    ddata.setdefault(k, v)
+dc.write_text(json.dumps(ddata, indent=2), 'utf-8')
+sys.exit(0 if sdata else 1)
+" 2>/dev/null; then
+                    break
+                fi
             done
         fi
         docker compose $ENV_ARG run --rm --no-deps -u 0 --entrypoint "" web sh -c '
