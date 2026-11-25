@@ -217,5 +217,10 @@ docker compose $ENV_ARG exec web python manage.py collectstatic --noinput
 echo "🔄 Starte Container neu..."
 docker compose $ENV_ARG restart web
 
+HOST_PORT=$(docker compose $ENV_ARG port web 8000 2>/dev/null | awk -F: '{print $NF}' | head -n1)
+[ -z "$HOST_PORT" ] && [ -n "$ENV_FILE" ] && HOST_PORT=$(grep -E '^WEB_PORT=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d ' "\r')
+C_NAME=""
+[ -n "$ENV_FILE" ] && C_NAME=$(grep -E '^CONTAINER_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d ' "\r')
 echo "-----------------------------------"
+echo "✔ Container ${C_NAME:-$(basename "$ROOT_DIR")}  Started on Port ${HOST_PORT:-8000}"
 echo "✅ FAST Update abgeschlossen!"
