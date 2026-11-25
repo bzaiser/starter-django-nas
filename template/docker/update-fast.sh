@@ -60,7 +60,9 @@ get_web_state() {
 }
 
 # 2b. First-run image bootstrap on NAS: reuse existing Baukasten image in 0.1s (NEVER build in update-fast.sh!)
-IMG_NAME=$(grep -E '^\s*image:\s*' docker-compose.yml 2>/dev/null | head -n1 | awk '{print $2}' | tr -d '\r"' || echo "")
+IMG_NAME=""
+[ -n "$ENV_FILE" ] && IMG_NAME=$(grep -E '^IMAGE_NAME=' "$ENV_FILE" 2>/dev/null | head -n1 | cut -d= -f2- | tr -d ' "\r' || echo "")
+[ -z "$IMG_NAME" ] && IMG_NAME=$(grep -E '^\s*image:\s*' docker-compose.yml 2>/dev/null | head -n1 | awk '{print $2}' | tr -d '\r"' | sed -E 's/^\$\{[^:}]+:-([^}]+)\}$/\1/' || echo "")
 if [ -n "$IMG_NAME" ] && ! docker image inspect "$IMG_NAME" >/dev/null 2>&1; then
     REUSED=""
     for base_img in \
